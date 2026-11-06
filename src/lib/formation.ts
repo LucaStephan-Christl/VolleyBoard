@@ -3,6 +3,7 @@ import type { Phase, Plan, Player, Pt, Role, SlotIdx } from './types'
 export const PHASES: { id: Phase; label: string; short: string; blurb: string }[] = [
   { id: 'receive', label: 'Serve receive', short: 'Receive', blurb: 'Opponent serves – we must obey the overlap rules.' },
   { id: 'attack', label: 'After receive', short: 'Attack', blurb: 'Ball is passed – everyone releases to their attack / cover spot.' },
+  { id: 'defense', label: 'Block & defense', short: 'Defense', blurb: 'Opponent attacks – our block at the net, everyone else positioned around it. Free positioning.' },
   { id: 'serve', label: 'Our serve', short: 'Serve', blurb: 'We serve – block & defence base. Swiss regional rules: free positioning, no overlap rules.' },
 ]
 
@@ -65,35 +66,50 @@ export function courtAt(plan: Plan, players: Player[], rot: number, phase: Phase
 const passers: Role[] = ['OH', 'L']
 const isPasser = (r: Role) => passers.includes(r)
 
+/**
+ * 3-man serve receive: libero + the two outsides pass in a line across the court,
+ * setter / middle / dia stay out of the pass (setter hides at the net or behind the passers).
+ */
 function receiveDefaults(roles: Role[]): Pt[] {
   const pts: Pt[] = new Array(6)
-  // x per slot  [P1, P2, P3, P4, P5, P6]
-  const frontX = { 1: 86, 2: 50, 3: 15 } as const
+  const NATURAL_LANE = [2, 2, 1, 0, 0, 1] // slot → 0 left, 1 middle, 2 right
+  const LANE_X = [18, 50, 82]
+
+  // 1) passers share three lanes: front-row passers keep their lane, back-row passers take the nearest free one
+  const lane = new Map<number, number>()
+  const taken = new Set<number>()
+  const passerSlots = roles.map((r, i) => (isPasser(r) ? i : -1)).filter((i) => i >= 0)
+  const order = [...passerSlots.filter((i) => !isBackRow(i)), ...passerSlots.filter((i) => isBackRow(i))]
+  for (const i of order) {
+    const want = NATURAL_LANE[i]
+    const choice = [want, ...[0, 1, 2].filter((l) => l !== want).sort((a, b) => Math.abs(a - want) - Math.abs(b - want))].find((l) => !taken.has(l))
+    lane.set(i, choice ?? want)
+    taken.add(choice ?? want)
+  }
+
   roles.forEach((role, i) => {
     const back = isBackRow(i)
-    const pass = isPasser(role)
-    if (!back) {
-      const x = i === 1 ? frontX[1] : i === 2 ? frontX[2] : frontX[3]
-      if (role === 'S') {
-        // setter hides at the net, target is right front
-        pts[i] = { x: i === 1 ? 86 : i === 2 ? 66 : 32, y: 8 }
-      } else if (pass) {
-        pts[i] = { x: i === 1 ? 82 : i === 2 ? 48 : 18, y: 32 }
-      } else {
-        pts[i] = { x, y: role === 'OPP' ? 12 : 10 }
-      }
+    if (isPasser(role)) {
+      const l = lane.get(i)!
+      pts[i] = { x: LANE_X[l], y: back ? (l === 1 ? 68 : 62) : 34 }
+    } else if (!back) {
+      // front-row non-passers hug the net; the setter hides toward the target zone
+      if (role === 'S') pts[i] = { x: i === 1 ? 86 : i === 2 ? 66 : 32, y: 8 }
+      else pts[i] = { x: i === 1 ? 86 : i === 2 ? 50 : 15, y: role === 'OPP' ? 12 : 10 }
+    } else if (role === 'S') {
+      pts[i] = i === 0 ? { x: 92, y: 48 } : i === 5 ? { x: 68, y: 44 } : { x: 38, y: 46 }
+    } else if (role === 'OPP') {
+      pts[i] = i === 0 ? { x: 92, y: 50 } : i === 5 ? { x: 64, y: 48 } : { x: 14, y: 48 }
     } else {
-      if (pass) {
-        pts[i] = { x: i === 0 ? 78 : i === 5 ? 48 : 20, y: i === 5 ? 70 : 64 }
-      } else if (role === 'S') {
-        pts[i] = i === 0 ? { x: 92, y: 48 } : i === 5 ? { x: 68, y: 44 } : { x: 38, y: 46 }
-      } else if (role === 'OPP') {
-        pts[i] = i === 0 ? { x: 92, y: 50 } : i === 5 ? { x: 64, y: 48 } : { x: 14, y: 48 }
-      } else {
-        pts[i] = i === 0 ? { x: 80, y: 66 } : i === 5 ? { x: 50, y: 72 } : { x: 20, y: 66 }
-      }
+      pts[i] = i === 0 ? { x: 80, y: 66 } : i === 5 ? { x: 50, y: 72 } : { x: 20, y: 66 }
     }
   })
+
+  // 2) keep each row in legal left→right order (front P4,P3,P2 · back P5,P6,P1) by sorting the x positions
+  for (const row of [[3, 2, 1], [4, 5, 0]]) {
+    const xs = row.map((i) => pts[i].x).sort((a, b) => a - b)
+    row.forEach((i, k) => (pts[i] = { ...pts[i], x: xs[k] }))
+  }
   return pts
 }
 
@@ -122,20 +138,41 @@ function attackDefaults(roles: Role[], rot: number): Pt[] {
   })
 }
 
+/**
+ * Block & defense: double block at the left pin (middle + one outside/dia), the third front-row player
+ * steps off to cover tips, back row sits around the block (line, deep middle, cross-court).
+ * A back-row setter waits near the net to set the transition.
+ */
+function defenseDefaults(roles: Role[]): Pt[] {
+  const pts: Pt[] = new Array(6)
+  const front = [3, 2, 1]
+  const mb = front.find((i) => roles[i] === 'MB') ?? 2
+  const rest = front.filter((i) => i !== mb)
+  const partner = rest.find((i) => roles[i] !== 'S') ?? rest[0]
+  const off = rest.find((i) => i !== partner)!
+  pts[partner] = { x: 16, y: 6 }
+  pts[mb] = { x: 31, y: 6 }
+  pts[off] = { x: 70, y: 20 }
+  const backSpot: Record<number, Pt> = { 0: { x: 84, y: 64 }, 5: { x: 50, y: 80 }, 4: { x: 14, y: 60 } }
+  for (const i of [0, 5, 4]) pts[i] = roles[i] === 'S' ? { x: 80, y: 38 } : backSpot[i]
+  return pts
+}
+
 function serveDefaults(): Pt[] {
   return [
     { x: 92, y: 112 }, // P1 server
     { x: 84, y: 9 }, // P2 right blocker
     { x: 50, y: 9 }, // P3 middle blocker
     { x: 16, y: 9 }, // P4 left blocker
-    { x: 18, y: 64 }, // P5 left back
-    { x: 50, y: 74 }, // P6 deep middle
+    { x: 12, y: 66 }, // P5 left back – perimeter, on the line
+    { x: 50, y: 82 }, // P6 deep middle – 6-back
   ]
 }
 
 export function defaultPositions(phase: Phase, roles: Role[], rot = 0): Pt[] {
   if (phase === 'receive') return receiveDefaults(roles)
   if (phase === 'attack') return attackDefaults(roles, rot)
+  if (phase === 'defense') return defenseDefaults(roles)
   return serveDefaults()
 }
 

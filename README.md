@@ -5,8 +5,8 @@ Everything runs in the browser (no backend) and is saved automatically in `local
 
 ## Features
 
-- **Rotations** – drag players on the court for each of the 6 rotations and 3 phases
-  (*serve receive*, *after receive / attack*, *our serve*). Every spot you place is remembered.
+- **Rotations** – drag players on the court for each of the 6 rotations and 4 phases
+  (*serve receive*, *after receive / attack*, *block & defense*, *our serve*). Every spot you place is remembered.
   - Live **overlap-rule check** (P1 behind P2, P4 left of P3 …) with red warnings in serve receive. On our serve positioning is free (Swiss regional rules), so no check there.
   - Movement arrows between receive ⇄ attack, notes per rotation/phase, overview of all 6 rotations.
   - Change who plays a position (dropdown or drag a bench player onto the court) – the spots stay with the *position*, the new player takes them over.

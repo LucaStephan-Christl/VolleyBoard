@@ -7,8 +7,8 @@ export interface Player {
   number?: string
 }
 
-/** The three moments of a rally we plan positions for. */
-export type Phase = 'receive' | 'attack' | 'serve'
+/** The four moments of a rally we plan positions for. */
+export type Phase = 'receive' | 'attack' | 'defense' | 'serve'
 
 /** 0-based slot index: 0 = P1 (right back / server) ... 5 = P6 (middle back). */
 export type SlotIdx = 0 | 1 | 2 | 3 | 4 | 5

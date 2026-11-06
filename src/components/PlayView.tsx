@@ -285,6 +285,12 @@ export function PlayView() {
     if (!alive(my)) return
     setMarker({ pt: dest, kind })
     setOutcome(out)
+    if (key === 'dug') {
+      // they dig it and counter-attack: we drop into our block & defense formation
+      setFormation('defense')
+      setOverrides({})
+      say('Block & defense formation – block up, everyone around the block.')
+    }
     setStage('done')
   }
 
@@ -565,4 +571,4 @@ export function PlayView() {
   )
 }
 
-const PHASE_LABEL: Record<Phase, string> = { receive: 'serve-receive', attack: 'after-receive', serve: 'our-serve' }
+const PHASE_LABEL: Record<Phase, string> = { receive: 'serve-receive', attack: 'after-receive', defense: 'block & defense', serve: 'our-serve' }

@@ -113,7 +113,7 @@ export function BoardView() {
   }
 
   /* movement arrows between receive ⇄ attack */
-  const otherPhase: Phase | null = phase === 'receive' ? 'attack' : phase === 'attack' ? 'receive' : null
+  const otherPhase: Phase | null = phase === 'receive' ? 'attack' : phase === 'attack' ? 'receive' : phase === 'defense' ? 'attack' : null
   const otherPts = useMemo(() => (otherPhase ? positionsFor(plan, players, rotation, otherPhase) : null), [plan, players, rotation, otherPhase])
   const arrows =
     showMoves && otherPts ? (
@@ -231,7 +231,7 @@ export function BoardView() {
               <label className="toggle"><input type="checkbox" checked={snap} onChange={(e) => setSnap(e.target.checked)} /> Snap to grid</label>
               <span className="spacer" />
               <button className="btn" disabled={!customCount} onClick={() => resetPositions({ rot: rotation, phase })}>Reset this view</button>
-              <button className="btn" onClick={() => { if (confirm(`Reset all three phases of rotation ${rotation} to the defaults?`)) resetPositions({ rot: rotation }) }}>Reset rotation</button>
+              <button className="btn" onClick={() => { if (confirm(`Reset all phases of rotation ${rotation} to the defaults?`)) resetPositions({ rot: rotation }) }}>Reset rotation</button>
             </div>
           </>
         )}

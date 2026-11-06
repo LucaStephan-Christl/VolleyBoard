@@ -31,6 +31,11 @@ for (const plan of makeDefaultPlans()) {
         console.log(`${plan.name} R${rot} ${phase.short.padEnd(7)} ${line}`)
         continue
       }
+      for (let a = 0; a < 6; a++)
+        for (let b = a + 1; b < 6; b++) {
+          const d = Math.hypot(pts[a].x - pts[b].x, pts[a].y - pts[b].y)
+          if (d < 11) fail(`${plan.name} R${rot} ${phase.id}: ${SLOT_NAMES[a]} and ${SLOT_NAMES[b]} stand on top of each other (${d.toFixed(1)})`)
+        }
       const v = checkOverlap(pts)
       console.log(`${plan.name} R${rot} ${phase.short.padEnd(7)} ${line} ${v.length ? '← ILLEGAL' : ''}`)
       for (const x of v) fail(`${plan.name} R${rot} ${phase.id}: ${x.message}`)
