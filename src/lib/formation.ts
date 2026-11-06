@@ -97,16 +97,23 @@ function receiveDefaults(roles: Role[]): Pt[] {
   return pts
 }
 
-function attackDefaults(roles: Role[]): Pt[] {
+/**
+ * Rotations where our front-row outside hits from the RIGHT and the dia from the LEFT
+ * (the opposite of the usual outside-left / dia-right), e.g. R1 where they simply stay on their own sides.
+ */
+export const MIRRORED_ATTACK_ROTATIONS = [1]
+
+function attackDefaults(roles: Role[], rot: number): Pt[] {
+  const mirrored = MIRRORED_ATTACK_ROTATIONS.includes(rot)
   return roles.map((role, i) => {
     const back = isBackRow(i)
     switch (role) {
       case 'S':
         return { x: 72, y: 9 }
       case 'OPP':
-        return back ? { x: 88, y: 48 } : { x: 93, y: 18 }
+        return back ? { x: 88, y: 48 } : mirrored ? { x: 9, y: 16 } : { x: 93, y: 18 }
       case 'OH':
-        return back ? { x: 46, y: 46 } : { x: 10, y: 16 }
+        return back ? { x: 46, y: 46 } : mirrored ? { x: 93, y: 18 } : { x: 10, y: 16 }
       case 'MB':
         return back ? (i === 0 ? { x: 80, y: 66 } : i === 5 ? { x: 50, y: 70 } : { x: 20, y: 66 }) : { x: 50, y: 14 }
       case 'L':
@@ -126,9 +133,9 @@ function serveDefaults(): Pt[] {
   ]
 }
 
-export function defaultPositions(phase: Phase, roles: Role[]): Pt[] {
+export function defaultPositions(phase: Phase, roles: Role[], rot = 0): Pt[] {
   if (phase === 'receive') return receiveDefaults(roles)
-  if (phase === 'attack') return attackDefaults(roles)
+  if (phase === 'attack') return attackDefaults(roles, rot)
   return serveDefaults()
 }
 
@@ -138,7 +145,7 @@ export const noteKey = (rot: number, phase: Phase) => `${rot}:${phase}`
 /** Positions for the 6 slots (index = slot) – hand-placed overrides win over defaults. */
 export function positionsFor(plan: Plan, players: Player[], rot: number, phase: Phase): Pt[] {
   const court = courtAt(plan, players, rot, phase)
-  const defaults = defaultPositions(phase, court.map((c) => c.role))
+  const defaults = defaultPositions(phase, court.map((c) => c.role), rot)
   return defaults.map((d, i) => plan.overrides[posKey(rot, phase, i)] ?? d)
 }
 
