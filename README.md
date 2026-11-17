@@ -16,6 +16,7 @@ Everything runs in the browser (no backend) and is saved automatically in `local
   (kill, block-out, feint, roll shot, tooled block, dug, blocked, error). Players glide from receive to attack positions. Auto-play mode, side-out → rotate → serve.
 - **Stats** – tap-to-record serve (ace / tough / error), pass, set (1–3 + target), attack (kill, block-out, feint …), block, dig, other errors, team events.
   Player table, hitting efficiency, pass distribution, set distribution, points by rotation, sessions per match/practice, full log with delete/undo.
+- **Export** – on the Stats tab: print-ready match report (save as PDF), or CSV files (player stats, by rotation, every event, or all in one) that open in Excel / Google Sheets. Respects the session / all-sessions switch.
 - **Share / Backup** – copy a link that contains roster + lineups + positions, or export/import everything (incl. stats) as JSON.
 
 ## Run locally

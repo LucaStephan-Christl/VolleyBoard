@@ -1,4 +1,4 @@
-import { useMemo, useState } from 'react'
+import { useEffect, useMemo, useRef, useState } from 'react'
 import { ROLE_META, ROTATIONS, courtAt } from '../lib/formation'
 import {
   ACTIONS,
@@ -15,8 +15,9 @@ import {
   totalErrors,
   type PlayerStats,
 } from '../lib/stats'
+import { downloadText, eventTable, rotationTable, slug, summaryTable, toCsv, type Table } from '../lib/exportStats'
 import { useActivePlan, useApp, useUi } from '../lib/store'
-import type { StatAction } from '../lib/types'
+import type { StatAction, StatEvent } from '../lib/types'
 
 type Panel = 'record' | 'summary' | 'rotations' | 'log'
 
@@ -30,7 +31,10 @@ export function StatsView() {
   const session = sessions.find((s) => s.id === activeSessionId) ?? sessions[0]
   const events = useMemo(() => (scope === 'all' ? allEvents : allEvents.filter((e) => e.sessionId === session.id)), [allEvents, scope, session.id])
 
+  const scopeLabel = scope === 'all' ? 'All sessions' : session.name
+
   return (
+    <>
     <div className="page">
       <div className="stats-head">
         <div className="planbar">
@@ -55,12 +59,11 @@ export function StatsView() {
             </button>
           ))}
         </div>
-        {panel !== 'record' && (
-          <div className="seg small">
-            <button className={scope === 'session' ? 'active' : ''} onClick={() => setScope('session')}>This session</button>
-            <button className={scope === 'all' ? 'active' : ''} onClick={() => setScope('all')}>All sessions</button>
-          </div>
-        )}
+        <div className="seg small">
+          <button className={scope === 'session' ? 'active' : ''} onClick={() => setScope('session')}>This session</button>
+          <button className={scope === 'all' ? 'active' : ''} onClick={() => setScope('all')}>All sessions</button>
+        </div>
+        <ExportMenu events={events} scopeLabel={scopeLabel} date={scope === 'all' ? '' : session.date} />
       </div>
 
       {panel === 'record' && <RecordPanel />}
@@ -68,6 +71,109 @@ export function StatsView() {
       {panel === 'rotations' && <RotationPanel events={events} />}
       {panel === 'log' && <LogPanel events={events} />}
     </div>
+    <PrintReport events={events} scopeLabel={scopeLabel} date={scope === 'all' ? '' : session.date} />
+    </>
+  )
+}
+
+/* ------------------------------------------------------------------ */
+/* Export                                                              */
+/* ------------------------------------------------------------------ */
+
+function ExportMenu({ events, scopeLabel, date }: { events: StatEvent[]; scopeLabel: string; date: string }) {
+  const players = useApp((s) => s.players)
+  const sessions = useApp((s) => s.sessions)
+  const empty = events.length === 0
+  const ref = useRef<HTMLDetailsElement>(null)
+  useEffect(() => {
+    const close = (e: PointerEvent) => {
+      if (ref.current?.open && !ref.current.contains(e.target as Node)) ref.current.open = false
+    }
+    document.addEventListener('pointerdown', close)
+    return () => document.removeEventListener('pointerdown', close)
+  }, [])
+  const base = `volley-stats-${slug(scopeLabel)}${date ? `-${date}` : ''}`
+  const tables = (): Table[] => [
+    summaryTable(players, events, `Player statistics – ${scopeLabel}`),
+    rotationTable(events, 'By rotation'),
+    eventTable(players, sessions, events, 'Event log'),
+  ]
+  const save = (name: string, t: Table | Table[]) => {
+    downloadText(`${base}-${name}.csv`, toCsv(t))
+    ;(document.activeElement as HTMLElement | null)?.closest('details')?.removeAttribute('open')
+  }
+
+  return (
+    <details className="menu" ref={ref}>
+      <summary className={`btn ${empty ? 'disabled' : ''}`} onClick={(e) => empty && e.preventDefault()}>⤓ Export</summary>
+      <div className="menu-pop">
+        <div className="muted small menu-head">{scopeLabel} · {events.length} events</div>
+        <button onClick={() => { (document.activeElement as HTMLElement | null)?.closest('details')?.removeAttribute('open'); setTimeout(() => window.print(), 50) }}>
+          <b>🖨 Report / PDF</b>
+          <small>Print-ready match report – choose “Save as PDF”</small>
+        </button>
+        <button onClick={() => save('players', summaryTable(players, events))}>
+          <b>Player stats (CSV)</b>
+          <small>One row per player + team total – opens in Excel / Sheets</small>
+        </button>
+        <button onClick={() => save('rotations', rotationTable(events))}>
+          <b>By rotation (CSV)</b>
+          <small>Points won / lost, pass and kill numbers per rotation</small>
+        </button>
+        <button onClick={() => save('events', eventTable(players, sessions, events))}>
+          <b>Every event (CSV)</b>
+          <small>Raw log: time, player, action, rating, rotation</small>
+        </button>
+        <button onClick={() => save('all', tables())}>
+          <b>Everything in one file (CSV)</b>
+          <small>Players, rotations and event log</small>
+        </button>
+      </div>
+    </details>
+  )
+}
+
+function PrintTable({ t }: { t: Table }) {
+  return (
+    <table className="print-table">
+      <thead>
+        <tr>{t.head.map((h, i) => <th key={i}>{h}</th>)}</tr>
+      </thead>
+      <tbody>
+        {t.rows.map((r, i) => (
+          <tr key={i} className={r[0] === 'TEAM' ? 'total' : ''}>
+            {r.map((c, j) => <td key={j}>{c === null ? '–' : c}</td>)}
+          </tr>
+        ))}
+      </tbody>
+    </table>
+  )
+}
+
+/** Only visible when printing (see styles.css @media print). */
+function PrintReport({ events, scopeLabel, date }: { events: StatEvent[]; scopeLabel: string; date: string }) {
+  const players = useApp((s) => s.players)
+  if (!events.length) return null
+  // the print report leaves out the very wide raw columns that are not useful on paper
+  const sum = summaryTable(players, events)
+  const keep = ['Player', 'Serves', 'Aces', 'Serve errors', 'Passes', 'Pass avg (0-3)', 'Pass 3 %', 'Sets', 'Set avg (0-3)', 'Attacks', 'Kills', 'Attack errors', 'Blocked', 'Kill %', 'Hitting eff. %', 'Block stuffs', 'Digs', 'Dig avg (0-3)', 'Total errors', '+/-']
+  const idx = keep.map((k) => sum.head.indexOf(k))
+  const compact: Table = { ...sum, head: keep, rows: sum.rows.map((r) => idx.map((i) => r[i])) }
+  const team = sum.rows[sum.rows.length - 1]
+  const won = team[sum.head.indexOf('Points won')]
+  const lost = team[sum.head.indexOf('Points lost')]
+  return (
+    <section className="print-report">
+      <h1>VolleyBoard · Match statistics</h1>
+      <p className="print-meta">
+        <b>{scopeLabel}</b>{date ? ` · ${date}` : ''} · {events.length} recorded events · printed {new Date().toLocaleDateString()}
+      </p>
+      <p className="print-meta">Logged points: <b>{won}</b> won – <b>{lost}</b> lost. Pass / set / dig ratings: 3 perfect, 2 OK, 1 poor, 0 error. Hitting efficiency = (kills − errors − blocked) ÷ attacks.</p>
+      <h2>Players</h2>
+      <PrintTable t={compact} />
+      <h2>By rotation</h2>
+      <PrintTable t={rotationTable(events)} />
+    </section>
   )
 }
 
